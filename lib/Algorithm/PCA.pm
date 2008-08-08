@@ -1,67 +1,61 @@
-#!/usr/bin/perl
+package Algorithm::PCA;
 
 use warnings;
 use strict;
 
-use Algorithm::PCA;
 use Algorithm::PCA::Matrix;
-use Math::MatrixReal;
 use Data::Dumper;
 
-#
-# http://en.wikipedia.org/wiki/Principal_components_analysis
-#
+sub reduce {
+	my ($x) = @_;
 
-my $x = Algorithm::PCA::Matrix->new_from_cols([
-	[1,0,0,1,0,1], # sample 1
-	[0,2,0,1,0,2], # sample 2
-	[1,0,1,0,1,0], # sample 3
-]);
+	#
+	# http://en.wikipedia.org/wiki/Principal_components_analysis
+	#
 
+	my ($m, $n) = $x->dim();
 
-my ($m, $n) = $x->dim();
-
-#print "Dimensions (m) = $m\n";
-#print "Samples (n) = $n\n";
-#&dump($x);
+	#print "Dimensions (m) = $m\n";
+	#print "Samples (n) = $n\n";
+	#&dump($x);
 
 
-#
-# Calculate the empirical mean
-#
+	#
+	# Calculate the empirical mean
+	#
 
-my $u = $x->empirical_mean_rows();
-
-
-#
-# Calculate the deviations from the mean
-#
-
-my $h = Algorithm::PCA::Matrix->new_ones(1, $n);
-
-my $bx = $x - ($u * $h);
+	my $u = $x->empirical_mean_rows();
 
 
-#
-# Find the covariance matrix
-#
+	#
+	# Calculate the deviations from the mean
+	#
 
-my $c = $bx->covariance();
+	my $h = Algorithm::PCA::Matrix->new_ones(1, $n);
+
+	my $bx = $x - ($u * $h);
 
 
-#
-# Find the eigenvectors and eigenvalues of the covariance matrix
-#
+	#
+	# Find the covariance matrix
+	#
 
-my ($l, $v) = $c->sym_diagonalize();
+	my $c = $bx->covariance();
 
-my @pairs;
 
-my $d = Algorithm::PCA::Matrix->new($m, $m);
-for my $i (1..$m){
-	$d->assign($i, $i, $l->element($i, 1));
-	push @pairs, [$i, $l->element($i, 1)];
-}
+	#
+	# Find the eigenvectors and eigenvalues of the covariance matrix
+	#
+
+	my ($l, $v) = $c->sym_diagonalize();
+
+	my @pairs;
+
+	my $d = Algorithm::PCA::Matrix->new($m, $m);
+	for my $i (1..$m){
+		$d->assign($i, $i, $l->element($i, 1));
+		push @pairs, [$i, $l->element($i, 1)];
+	}
 
 #print Dumper $l->column(1);
 #&dump($l);
@@ -141,15 +135,16 @@ my $z = $bx->divide_by_element($c->empirical_standard_deviation() * $h);
 my $w_trans = $w->ret_transpose();
 my $y = $w_trans * $z;
 
-&dump($y);
+#&dump($y);
 
+return $y;
+}
 
-my $y2 = Algorithm::PCA::reduce($x);
-
-&dump($y2);
 
 
 sub dump {
 	$_[0]->display_precision(2);
 	print $_[0]."\n";
 }
+
+1;
