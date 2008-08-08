@@ -3,6 +3,7 @@
 use warnings;
 use strict;
 
+use Algorithm::PCA::Matrix;
 use Math::MatrixReal;
 use Data::Dumper;
 
@@ -10,69 +11,40 @@ use Data::Dumper;
 # http://en.wikipedia.org/wiki/Principal_components_analysis
 #
 
-my $x = Math::MatrixReal->new_from_rows([
+my $x = Algorithm::PCA::Matrix->new_from_cols([
 	[1,0,0,1,0,1], # sample 1
 	[0,2,0,1,0,2], # sample 2
 	[1,0,1,0,1,0], # sample 3
 ]);
+
+my ($m, $n) = $x->dim();
+
+#print "Dimensions (m) = $m\n";
+#print "Samples (n) = $n\n";
+#&dump($x);
 
 
 #
 # Calculate the empirical mean
 #
 
-my ($rows, $cols) = $x->dim();
-
-my $u = Math::MatrixReal->new(1, $cols);
-
-for my $i (1..$cols){
-	my $col = $x->column($i);
-	my $sum = $col->norm_sum();
-	$u->assign(1, $i, $sum / $rows);
-}
+my $u = $x->empirical_mean_rows();
 
 
 #
 # Calculate the deviations from the mean
 #
 
-my $bx = $x->shadow();
+my $h = Algorithm::PCA::Matrix->new_ones(1, $n);
 
-for my $i (1..$rows){
-	my $row = $x->row($i);
-	my $new = $row - $u;
-	$bx->assign_row($i, $new);
-}
-
-
-#
-# rotate the dimensions - each sample is now in a column
-#
-
-$bx = &trans($bx);
-
-my ($m, $n) = $bx->dim();
-
-print "Dimensions (m) = $m\n";
-print "Samples (n) = $n\n";
-
-#&dump($bx);
-#exit;
+my $bx = $x - ($u * $h);
 
 
 #
 # Find the covariance matrix
 #
 
-my $b_trans = &trans($bx);
-
-my $b_temp = $bx * $b_trans;
-
-my $c = $b_temp->shadow();
-$c->multiply_scalar($b_temp, 1 / $rows);
-
-#&dump($c);
-#exit;
+my $c = $bx->covariance();
 
 
 #
@@ -83,7 +55,7 @@ my ($l, $v) = $c->sym_diagonalize();
 
 my @pairs;
 
-my $d = Math::MatrixReal->new($m, $m);
+my $d = Algorithm::PCA::Matrix->new($m, $m);
 for my $i (1..$m){
 	$d->assign($i, $i, $l->element($i, 1));
 	push @pairs, [$i, $l->element($i, 1)];
@@ -134,15 +106,7 @@ for my $pair (@sorted_pairs){
 # Compute the cumulative energy content for each eigenvector
 #
 
-my $g = Math::MatrixReal->new($m, 1);
-
-for my $i (1..$m){
-	my $total = 0;
-	for my $j (1..$i){
-		$total += $d_prime->element($j, $j);
-	}
-	$g->assign($i, 1, $total);
-}
+my $g = $d_prime->cumulative_energy_row();
 
 #&dump($g);
 
@@ -152,15 +116,7 @@ for my $i (1..$m){
 #
 
 my $limit = 2;
-
-my $w = Math::MatrixReal->new($m, $limit);
-
-for my $i (1..$m){
-	for my $j (1..$limit){
-
-		$w->assign($i, $j, $v->element($i, $j));
-	}
-}
+my $w = $v_prime->clone_chunk($m, $limit);
 
 #&dump($v);
 #&dump($w);
@@ -171,22 +127,8 @@ for my $i (1..$m){
 # Convert the source data to z-scores
 #
 
-my $s = Math::MatrixReal->new($m , 1);
-for my $i (1..$m){
-	$s->assign($i, 1, sqrt $c->element($i, $i));
-}
+my $z = $bx->divide_by_element($c->empirical_standard_deviation() * $h);
 
-my $h = Math::MatrixReal->new(1, $n);
-for my $i (1..$n){
-	$h->assign(1, $i, 1);
-}
-
-my $sh = $s * $h;
-
-my $z = $bx->each(sub { $_[0] / $sh->element($_[1], $_[2]); });
-
-#&dump($sh);
-#&dump($bx);
 #&dump($z);
 
 
@@ -194,21 +136,13 @@ my $z = $bx->each(sub { $_[0] / $sh->element($_[1], $_[2]); });
 # Project the z-scores of the data onto the new basis
 #
 
-my $w_trans = &trans($w);
+my $w_trans = $w->ret_transpose();
 my $y = $w_trans * $z;
 
 &dump($y);
 
 
 
-
-sub trans {
-	my ($x) = @_;
-	my ($rows, $cols) = $x->dim();
-	my $new_x =  Math::MatrixReal->new($cols, $rows);
-	$new_x->transpose($x);
-	return $new_x;
-}
 
 
 sub dump {
