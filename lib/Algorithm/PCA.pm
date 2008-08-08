@@ -47,97 +47,75 @@ sub reduce {
 	# Find the eigenvectors and eigenvalues of the covariance matrix
 	#
 
-	my ($l, $v) = $c->sym_diagonalize();
+	my ($d, $v) = $c->sym_diagonalize();
 
-	my @pairs;
 
-	my $d = Algorithm::PCA::Matrix->new($m, $m);
-	for my $i (1..$m){
-		$d->assign($i, $i, $l->element($i, 1));
-		push @pairs, [$i, $l->element($i, 1)];
+	#
+	# @pairs contains [column_num, eigenvalue] pairs for sorting
+	#
+
+	my @pairs = map { [$_, $d->element($_, 1)] }(1..$m);
+
+
+	#
+	# Rearrange the eigenvectors and eigenvalues
+	#
+
+	my $d_prime = $d->shadow();
+	my $v_prime = $v->shadow();
+
+	my @sorted_pairs = sort { $b->[1] <=> $a->[1] } @pairs;
+
+	my $col = 1;
+	for my $pair (@sorted_pairs){
+
+		# set col $col in d_prime to col $pair->[0] in d
+		# set col $col in v_prime to vol $pair->[0] in v
+
+		for my $i (1..$m){
+
+			$v_prime->assign($i, $col, $v->element($i, $pair->[0]));
+		}
+
+		$d_prime->assign($col, 1, $pair->[1]);
+
+		$col++;
 	}
 
-#print Dumper $l->column(1);
-#&dump($l);
-#print Dumper \@pairs;
-#&dump($d);
-#&dump($v);
-#exit;
-#print "-------------------------------\n";
+
+	#
+	# Compute the cumulative energy content for each eigenvector
+	#
+
+	#my $g = $d_prime->cumulative_energy_row();
+
+	#&dump($g);
 
 
-#
-# Rearrange the eigenvectors and eigenvalues
-#
+	#
+	# Select a subset of the eigenvectors as basis vectors
+	#
 
-my $d_prime = $d->shadow();
-my $v_prime = $v->shadow();
-
-my @sorted_pairs = sort { $b->[1] <=> $a->[1] } @pairs;
-
-#print Dumper \@sorted_pairs;
-
-my $col = 1;
-for my $pair (@sorted_pairs){
-
-	# set col $col in d_prime to col $pair->[0] in d
-	# set col $col in v_prime to vol $pair->[0] in v
-
-	for my $i (1..$m){
-
-		$v_prime->assign($i, $col, $v->element($i, $pair->[0]));
-	}
-
-	$d_prime->assign($col, $col, $pair->[1]);
-
-	$col++;
-}
-
-#&dump($d_prime);
-#&dump($v_prime);
-#exit;
+	my $limit = 2;
+	my $w = $v_prime->clone_chunk($m, $limit);
 
 
-#
-# Compute the cumulative energy content for each eigenvector
-#
+	#
+	# Convert the source data to z-scores
+	#
 
-my $g = $d_prime->cumulative_energy_row();
+	my $z = $bx->divide_by_element($c->empirical_standard_deviation() * $h);
 
-#&dump($g);
-
-
-#
-# Select a subset of the eigenvectors as basis vectors
-#
-
-my $limit = 2;
-my $w = $v_prime->clone_chunk($m, $limit);
-
-#&dump($v);
-#&dump($w);
-#exit;
+	#&dump($z);
 
 
-#
-# Convert the source data to z-scores
-#
+	#
+	# Project the z-scores of the data onto the new basis
+	#
 
-my $z = $bx->divide_by_element($c->empirical_standard_deviation() * $h);
+	my $y = $w->ret_transpose() * $z;
 
-#&dump($z);
-
-
-#
-# Project the z-scores of the data onto the new basis
-#
-
-my $w_trans = $w->ret_transpose();
-my $y = $w_trans * $z;
-
-#&dump($y);
-
-return $y;
+	return $y;
 }
 
 
