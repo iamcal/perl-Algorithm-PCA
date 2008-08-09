@@ -6,8 +6,17 @@ use strict;
 use Algorithm::PCA::Matrix;
 use Data::Dumper;
 
-sub reduce {
-	my ($x) = @_;
+
+#
+# returns a components matrix which can be used to do PCA on a dataset
+# (requires a dataset to derive this from)
+#
+
+sub get_components {
+	my ($data, $dims) = @_;
+
+	my $x = Algorithm::PCA::Matrix->new_from_cols($data);
+
 
 	#
 	# http://en.wikipedia.org/wiki/Principal_components_analysis
@@ -64,6 +73,9 @@ sub reduce {
 	my $d_prime = $d->shadow();
 	my $v_prime = $v->shadow();
 
+	bless $d_prime, 'Algorithm::PCA::Matrix';
+	bless $v_prime, 'Algorithm::PCA::Matrix';
+
 	my @sorted_pairs = sort { $b->[1] <=> $a->[1] } @pairs;
 
 	my $col = 1;
@@ -83,28 +95,101 @@ sub reduce {
 	}
 
 
+	#&dump($d_prime);
+	#&dump($v_prime);
+	#exit;
+
+
 	#
-	# Compute the cumulative energy content for each eigenvector
+	# we can manually specify the dims, else figure it out based on energy
 	#
 
-	#my $g = $d_prime->cumulative_energy_row();
+	my $limit = $dims;
 
+	if (!$limit){
+
+		#
+		# Compute the cumulative energy content for each eigenvector
+		#
+
+		my $g = $d_prime->cumulative_energy_row();
+
+
+		#
+		# we want enough dims to include 90%+ of the eigenvalues
+		#
+
+		for my $i (1..$m){
+			$limit = $i;
+			last unless $g->element($i, 1) < 90;
+		}
+	}
+
+	#print "limit is $limit\n";
 	#&dump($g);
+	#exit;
 
 
 	#
 	# Select a subset of the eigenvectors as basis vectors
 	#
 
-	my $limit = 2;
 	my $w = $v_prime->clone_chunk($m, $limit);
 
+
+	return $w->ret_transpose();
+}
+
+
+#
+# reduce a data set
+#
+
+sub reduce {
+	my ($data, $components) = @_;
+
+	my $x = Algorithm::PCA::Matrix->new_from_cols($data);
+
+	my $reduced = $components * $x;
+
+
+	#
+	# convert into an arrayref of arrayrefs;
+	#
+
+	my $out = [];
+
+	$reduced->each( sub { $out->[$_[2]-1]->[$_[1]-1] = $_[0]; } );
+
+	return $out;
+}
+
+
+#
+# reduce simple!
+#
+
+sub reduce_simple {
+	my ($data) = @_;
+
+	my $components = &get_components($data);
+	my $out = &reduce($data, $components);
+
+	return $out;
+}
+
+
+
+
+
+
+sub bleh {
 
 	#
 	# Convert the source data to z-scores
 	#
 
-	my $z = $bx->divide_by_element($c->empirical_standard_deviation() * $h);
+#	my $z = $bx->divide_by_element($c->empirical_standard_deviation() * $h);
 
 	#&dump($z);
 
@@ -113,9 +198,9 @@ sub reduce {
 	# Project the z-scores of the data onto the new basis
 	#
 
-	my $y = $w->ret_transpose() * $z;
+#	my $y = $w->ret_transpose() * $z;
 
-	return $y;
+#	return $y;
 }
 
 
