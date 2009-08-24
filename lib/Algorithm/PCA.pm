@@ -3,8 +3,9 @@ package Algorithm::PCA;
 use warnings;
 use strict;
 
+our $VERSION = 0.01;
+
 use Algorithm::PCA::Matrix;
-use Data::Dumper;
 
 
 #
